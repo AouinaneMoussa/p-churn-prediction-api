@@ -4,13 +4,11 @@ http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/cu
     <http:listener-config name="p-fidelite-httpListenerConfig">
         <http:listener-connection host="0.0.0.0" port="8082" />
     </http:listener-config>
-    <http:request-config name="HTTP_Request_config_to_FastAPI" doc:name="HTTP Request configuration" doc:id="a4c44b13-cc5c-48fb-ac32-f3a6462d88df" >
-		<http:request-connection host="localhost" port="5000" />
-	</http:request-config>
 	<http:request-config name="HTTP_Request_config_to_system" doc:name="HTTP Request configuration" doc:id="90f74ce3-69c5-4676-ab84-ca367dac333a" >
 		<http:request-connection host="localhost" port="8083" />
 	</http:request-config>
-    <apikit:config name="p-fidelite-config" api="resource::af5552ca-fce0-4bab-b132-46660313f2f0:p-fidelite:1.0.0:raml:zip:p-fidelite.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <apikit:config name="p-fidelite-config" api="p-fidelite.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    
     <flow name="p-fidelite-main">
         <http:listener config-ref="p-fidelite-httpListenerConfig" path="/api/*">
             <http:response statusCode="#[vars.httpStatus default 200]">
@@ -36,119 +34,75 @@ output application/json
                     </ee:variables>
                 </ee:transform>
             </on-error-propagate>
-            <on-error-propagate type="APIKIT:NOT_FOUND">
-                <ee:transform doc:name="Transform Message">
-                    <ee:message>
-                        <ee:set-payload><![CDATA[%dw 2.0
-output application/json
----
-{message: "Resource not found"}]]></ee:set-payload>
-                    </ee:message>
-                    <ee:variables>
-                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
-                    </ee:variables>
-                </ee:transform>
-            </on-error-propagate>
-            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
-                <ee:transform doc:name="Transform Message">
-                    <ee:message>
-                        <ee:set-payload><![CDATA[%dw 2.0
-output application/json
----
-{message: "Method not allowed"}]]></ee:set-payload>
-                    </ee:message>
-                    <ee:variables>
-                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
-                    </ee:variables>
-                </ee:transform>
-            </on-error-propagate>
-            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
-                <ee:transform doc:name="Transform Message">
-                    <ee:message>
-                        <ee:set-payload><![CDATA[%dw 2.0
-output application/json
----
-{message: "Not acceptable"}]]></ee:set-payload>
-                    </ee:message>
-                    <ee:variables>
-                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
-                    </ee:variables>
-                </ee:transform>
-            </on-error-propagate>
-            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
-                <ee:transform doc:name="Transform Message">
-                    <ee:message>
-                        <ee:set-payload><![CDATA[%dw 2.0
-output application/json
----
-{message: "Unsupported media type"}]]></ee:set-payload>
-                    </ee:message>
-                    <ee:variables>
-                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
-                    </ee:variables>
-                </ee:transform>
-            </on-error-propagate>
-            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
-                <ee:transform doc:name="Transform Message">
-                    <ee:message>
-                        <ee:set-payload><![CDATA[%dw 2.0
-output application/json
----
-{message: "Not Implemented"}]]></ee:set-payload>
-                    </ee:message>
-                    <ee:variables>
-                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
-                    </ee:variables>
-                </ee:transform>
-            </on-error-propagate>
-        </error-handler>
+            </error-handler>
     </flow>
+    
     <flow name="p-fidelite-console">
-        <http:listener config-ref="p-fidelite-httpListenerConfig" path="/console/*">
-            <http:response statusCode="#[vars.httpStatus default 200]">
-                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
-            </http:response>
-            <http:error-response statusCode="#[vars.httpStatus default 500]">
-                <http:body>#[payload]</http:body>
-                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
-            </http:error-response>
-        </http:listener>
+        <http:listener config-ref="p-fidelite-httpListenerConfig" path="/console/*" />
         <apikit:console config-ref="p-fidelite-config" />
-        <error-handler>
-            <on-error-propagate type="APIKIT:NOT_FOUND">
-                <ee:transform doc:name="Transform Message">
-                    <ee:message>
-                        <ee:set-payload><![CDATA[%dw 2.0
-output application/json
----
-{message: "Resource not found"}]]></ee:set-payload>
-                    </ee:message>
-                    <ee:variables>
-                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
-                    </ee:variables>
-                </ee:transform>
-            </on-error-propagate>
-        </error-handler>
     </flow>
+    
     <flow name="get:\health:p-fidelite-config">
 		<ee:transform doc:name="Transform Message">
             <ee:message>
                 <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
-payload]]></ee:set-payload>
+{ status: "healthy" }]]></ee:set-payload>
             </ee:message>
         </ee:transform>
     </flow>
+    
     <flow name="post:\predict:application\json:p-fidelite-config">
-        <ee:transform doc:name="Transform Message">
-            <ee:message>
-                <ee:set-payload><![CDATA[%dw 2.0
+    <http:request method="GET" doc:name="GET /clients/{id}/interactions"
+        config-ref="HTTP_Request_config_to_system"
+        path="#['/api/clients/' ++ payload.CustomerID ++ '/interactions']"
+        target="clientData" responseTimeout="500000"/>
+
+    <http:request method="POST" doc:name="POST /predict"
+        config-ref="HTTP_Request_config_to_system"
+        path="/api/predict"
+        target="predictionResult" responseTimeout="500000">
+        <http:body><![CDATA[#[vars.clientData]]]></http:body>
+        <http:headers><![CDATA[#[{
+            "Content-Type": "application/json"
+        }]]]></http:headers>
+    </http:request>
+
+    <ee:transform doc:name="Build Payload for /churn-records">
+        <ee:message>
+            <ee:set-payload><![CDATA[%dw 2.0
 output application/json
 ---
-payload]]></ee:set-payload>
-            </ee:message>
-        </ee:transform>
-		<http:request method="POST" doc:name="Request To s-churn-prediction-api" doc:id="dee25f43-02d0-4dd8-9097-4da0619da926" config-ref="HTTP_Request_config_to_system" path="/predict"/>
-    </flow>
+{
+  CustomerID: vars.clientData.CustomerID,
+  EmailAddress: vars.clientData.EmailAddress,
+  FullName: vars.clientData.FullName,
+  predictionDetails: vars.predictionResult
+}]]></ee:set-payload>
+        </ee:message>
+    </ee:transform>
+
+    <http:request method="POST" doc:name="POST /churn-records"
+        config-ref="HTTP_Request_config_to_system"
+        path="/api/churn-records" responseTimeout="500000">
+         <http:headers><![CDATA[#[{
+            "Content-Type": "application/json"
+        }]]]></http:headers>
+    </http:request>
+
+    <ee:transform doc:name="Set Final Success Response">
+        <ee:message>
+            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  "status": "SUCCES",
+  "message": "Le processus de prédiction et d'enregistrement pour le client " ++ vars.clientData.CustomerID ++ " est terminé.",
+  "finalResponse": payload
+}
+]]></ee:set-payload>
+        </ee:message>
+    </ee:transform>
+</flow>
 </mule>
